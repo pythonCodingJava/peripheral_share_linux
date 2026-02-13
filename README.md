@@ -1,6 +1,4 @@
-[![Build Status](https://travis-ci.com/quangthanh010290/keyboard_mouse_emulate_on_raspberry.svg?branch=master)](https://travis-ci.com/quangthanh010290/keyboard_mouse_emulate_on_raspberry)
-
-# Make things work first
+# Peripheral Share Linux
 
 ## Step 1: Setup
 
