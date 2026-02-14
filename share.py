@@ -3,7 +3,7 @@ import threading
 import time
 import kb.kb_client
 import mouse.mouse_client
-from multiprocessing import Process, Event
+from multiprocessing import Process, Event, Queue
 import signal 
 import dbus
 import traceback
@@ -13,7 +13,7 @@ from logging import warning
 import pyudev
 import re
 # from websocket import warning
-
+import notifier
 
 import asyncio
 
@@ -75,10 +75,10 @@ async def mouse_worker(grabbed, devnode, run, server, disconnected):
     except Exception as e :
         traceback.print_exc()
 
-async def keyboard_worker(grabbed, mac, run, server, disconnected):
+async def keyboard_worker(grabbed, mac, run, server, disconnected, log_queue):
     # print("Setting up keyboard worker")
     try:
-        kbrd = kb.kb_client.Keyboard(grabbed, server, disconnected, mac)
+        kbrd = kb.kb_client.Keyboard(grabbed, server, disconnected, mac, log_queue)
         while not run.is_set():
                 async for event in kbrd.dev.async_read_loop():
                     if not grabbed.is_set() :
@@ -122,8 +122,12 @@ async def main():
     # server_obj.listen()
     t.start()
 
+    queue = Queue()
+    guirun = Event()
+    guip = Process(target=notifier.main_loop, args=(guirun, queue, ))
+    guip.start()
 
-    async def checker(run, iface, disconnected):
+    async def checker(run, iface, disconnected, queue):
         device_props = {}
         bus = dbus.SystemBus()
 
@@ -155,7 +159,13 @@ async def main():
 
             for mac in discon :
                 iface.connections.pop(mac)
-            
+            if len(discon) > 0 :
+                if len(iface.connections) <= iface.currentconn-1 :
+                    iface.currentconn = 0
+                    queue.put(("destroy",))
+                else :
+                    queue.put((list(iface.connections.values())[iface.currentconn-1]['name'], ))
+
             if len(iface.connections) == 0:
                 # print("No devices connected..")
                 disconnected.set()
@@ -199,7 +209,7 @@ async def main():
         if "ID_INPUT_KEYBOARD" in d.properties:
             # keyboards.append(d.device_node)
 
-            future = asyncio.run_coroutine_threadsafe(keyboard_worker(grabbed, d.device_node, run, server_obj, disconnected), loop)
+            future = asyncio.run_coroutine_threadsafe(keyboard_worker(grabbed, d.device_node, run, server_obj, disconnected,queue), loop)
             task[d.device_node] = future
             future.add_done_callback(lambda x: task.pop(d.device_node))
             print("keyboard detected: %s", d.device_node)
@@ -228,7 +238,7 @@ async def main():
 
 
     task = {
-        "checker" : asyncio.create_task(checker(run,server_obj,disconnected)),
+        "checker" : asyncio.create_task(checker(run,server_obj,disconnected, queue)),
         # asyncio.create_task(mouse_worker(grabbed, run)),
         # asyncio.create_task(keyboard_worker(grabbed, run, server_obj, disconnected)),
     }
@@ -255,7 +265,7 @@ async def main():
     for kbrd in keyboards:
         # print("Starting mouse worker for %s", kbrd)
         # task.update({kbrd:asyncio.create_task()})
-        tas = asyncio.create_task(keyboard_worker(grabbed, kbrd, run, server_obj, disconnected))
+        tas = asyncio.create_task(keyboard_worker(grabbed, kbrd, run, server_obj, disconnected,queue))
         task.update({kbrd:tas})
         tas.add_done_callback(lambda x: task.pop(kbrd))
 

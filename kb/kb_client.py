@@ -15,11 +15,12 @@ import evdev  # used to get input from the keyboard
 from evdev import *
 import kb.keymap  as keymap # used to map evdev input to hid keodes
 import multiprocessing
+from notifier import show_menu
 
 # Define a client to listen to local key events
 class Keyboard():
 
-    def __init__(self, grabbed, iface, disconnected, dev):
+    def __init__(self, grabbed, iface, disconnected, dev, queue):
         # the structure for a bt keyboard input report (size is 10 bytes)
 
         self.grabbed = grabbed
@@ -46,7 +47,7 @@ class Keyboard():
             0x00]
 
         self.switch = False
-        print("setting up DBus Client")
+        # print("setting up DBus Client")
 
         # self.bus = dbus.SystemBus()
         # self.btkservice = self.bus.get_object(
@@ -54,7 +55,10 @@ class Keyboard():
         # self.iface = dbus.Interface(self.btkservice, 'org.kartik.btkbservice')
         self.iface = iface
 
-        print("waiting for keyboard")
+        self.queue = queue
+        # self.guirun = multiprocessing.Event()
+        # self.gui = multiprocessing.Process(target=show_menu, args=("iPad",self.guirun,))
+        # print("waiting for keyboard")
         # keep trying to key a keyboard
         # have_dev = False
         # while have_dev == False:
@@ -97,18 +101,24 @@ class Keyboard():
                     self.iface.currentconn += 1
                     if len(self.iface.connections) <= self.iface.currentconn-1 :
                         self.iface.currentconn = 0
+                        # self.guirun.set()
+                        # self.gui.terminate()
+                        self.queue.put(("destroy",))
                         
-                    if tograb :
+                    elif tograb :
+                        # self.guirun.clear()
+                        # self.gui = multiprocessing.Process(target=show_menu, args=(list(self.iface.connections.values())[self.iface.currentconn-1]['name'],self.guirun,self.queue,))
+                        # self.gui.start()
+                        self.queue.put(("show",))
+                        self.queue.put((list(self.iface.connections.values())[self.iface.currentconn-1]['name'], ))
+
                         self.grabbed.set()
                         self.dev.grab()
-                    
+                    else :
+                        self.queue.put((list(self.iface.connections.values())[self.iface.currentconn-1]['name'], ))
+
                     print(self.iface.currentconn)
-                    # if self.grabbed.is_set(): 
-                    #     self.dev.ungrab()
-                    #     self.grabbed.clear()
-                    # else :
-                    #     self.dev.grab()
-                    #     self.grabbed.set()
+                    
                 self.switch = False
                 
 
