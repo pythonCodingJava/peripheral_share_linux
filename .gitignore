@@ -1,4 +1,6 @@
 .vscode/*
 */__pycache__/*
 test.py
+venv
+venv/*
 __pycache__/*

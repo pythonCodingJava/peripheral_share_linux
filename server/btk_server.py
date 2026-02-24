@@ -14,13 +14,15 @@ import dbus.service
 import dbus.mainloop.glib
 import time
 import socket
-from gi.repository import GLib
+# from gi.repository import GLib
 from dbus.mainloop.glib import DBusGMainLoop
 import logging
 from logging import debug, info, warning, error
 import bluetooth
 from bluetooth import *
 import threading
+
+import subprocess
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -54,6 +56,7 @@ class BTKbDevice():
     def init_bt_device(self):
         print("3. Configuring Device name " + BTKbDevice.MY_DEV_NAME)
         # set the device class to a keybord and set the name
+        subprocess.run('rfkill unblock bluetooth'.split(" "))
         os.system("hciconfig hci0 up")
         os.system(f"hciconfig hci0 name '{BTKbDevice.MY_DEV_NAME}'")
         # make the device discoverable
@@ -144,20 +147,36 @@ class BTKbDevice():
 
             t2 = threading.Thread(target=self.interrupt_thread, args=(self.cinterrupt,))
             t2.start()
+
+            # t3 = threading.Thread(target=self.interrupt_keepalive_thread, args=(self.cinterrupt,))
+            # t3.start()
             self.connections.update({
                 cinfo[0]:{
                     "name":device_name,
                     "control":self.ccontrol,
-                    "interrupt":self.cinterrupt
+                    "interrupt":self.cinterrupt,
+                    "time":time.time_ns()
                 }
             })
 
-        # return cinfo[0]
+            print(len(self.connections))
 
-    def interrupt_thread(self, sock):
+        # return cinfo[0]
+    
+    def interrupt_keepalive_thread(self, sock:socket.socket):
+        try:
+            while True:
+                print("Sending keepalive")
+                sock.send(bytes([ 0xA1, 1, 0, 0, 0, 0, 0, 0, 0, 0 ]))
+                time.sleep(5)
+        except Exception as e :
+            print(e)
+
+    def interrupt_thread(self, sock:socket.socket):
         print("Starting interrupt thread")
         try:
             while True:
+                
                 data = sock.recv(1024)
                 if not data:
                     break
@@ -170,24 +189,27 @@ class BTKbDevice():
         print("Control thread started")
         try :
             while True:
-               data = sock.recv(1024)
-               if not data:
-                   break
-               print(data)
-               header = data[0]
-               msg_type = header & 0xF0
-               if msg_type == 0x70:  # SET_IDLE
-                   sock.send(b'\x00')  # handshake success
-               elif msg_type == 0x90:  # SET_PROTOCOL
-                   sock.send(b'\x00')
-               elif msg_type == 0x40:  # GET_REPORT
-                   neutral = b'\xA1\x01\x00\x00\x00\x00\x00\x00\x00'
-                   sock.send(neutral)
-               else:
-                   # unknown but acknowledge
-                   sock.send(b'\x00')
+                try :
+                    data = sock.recv(1024)
+                    if not data:
+                        break
+                    print(data)
+                    header = data[0]
+                    msg_type = header & 0xF0
+                    if msg_type == 0x70:  # SET_IDLE
+                        sock.send(b'\x00')  # handshake success
+                    elif msg_type == 0x90:  # SET_PROTOCOL
+                        sock.send(b'\x00')
+                    elif msg_type == 0x40:  # GET_REPORT
+                        neutral = b'\xA1\x01\x00\x00\x00\x00\x00\x00\x00'
+                        sock.send(neutral)
+                    else:
+                        # unknown but acknowledge
+                        sock.send(b'\x00')
+                except socket.timeout as e :
+                   continue
         except Exception as e :
-            print(e)
+            print("Control thread error : ", e)
         # if data[0] == 0x02:   # SET_IDLE
         #     control_sock.send(b'\x00')
 
@@ -197,15 +219,15 @@ class BTKbDevice():
 
     # send a string to the bluetooth host machine
     def send_string(self, message):
+
+        if len(self.connections) <= self.currentconn-1:
+            self.currentconn = 0
+        if self.currentconn == 0:
+            return False
+            
         try:
             # if len(self.connections) == 0:
             #     return False
-            
-            if len(self.connections) <= self.currentconn-1:
-                self.currentconn = 0
-
-            if self.currentconn == 0:
-                return False
             
             mac = list(self.connections.keys())[self.currentconn-1]
             self.connections[mac]['interrupt'].send(bytes(message))
@@ -222,6 +244,8 @@ class BTKbDevice():
             return True
         except OSError as err:
             print("sending data failed")
+            # self.connections.pop(list(self.connections.keys())[self.currentconn-1])
+            # self.currentconn = 0
             error(err)
             return False
             # self.listen()

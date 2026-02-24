@@ -45,6 +45,14 @@ class Keyboard():
             0x00,
             0x00,
             0x00]
+        
+        self.consumer_control = [
+            0xA1,
+            0x03,
+            0x00,
+            0x00
+        ]
+        self.consume = False
 
         self.switch = False
         # print("setting up DBus Client")
@@ -96,28 +104,26 @@ class Keyboard():
                 self.state[2][modkey_element] = 0
 
             if self.state[2] == [0,0,0,0,0,0,0,0] and self.switch:
-                if not self.disconnected.is_set() :
-                    tograb = self.iface.currentconn == 0
-                    self.iface.currentconn += 1
-                    if len(self.iface.connections) <= self.iface.currentconn-1 :
-                        self.iface.currentconn = 0
-                        # self.guirun.set()
-                        # self.gui.terminate()
-                        self.queue.put(("destroy",))
-                        
-                    elif tograb :
-                        # self.guirun.clear()
-                        # self.gui = multiprocessing.Process(target=show_menu, args=(list(self.iface.connections.values())[self.iface.currentconn-1]['name'],self.guirun,self.queue,))
-                        # self.gui.start()
-                        self.queue.put(("show",))
-                        self.queue.put((list(self.iface.connections.values())[self.iface.currentconn-1]['name'], ))
-
-                        self.grabbed.set()
-                        self.dev.grab()
-                    else :
-                        self.queue.put((list(self.iface.connections.values())[self.iface.currentconn-1]['name'], ))
-
-                    print(self.iface.currentconn)
+                # if not self.disconnected.is_set() :
+                tograb = self.iface.currentconn == 0
+                self.iface.currentconn += 1
+                if len(self.iface.connections) <= self.iface.currentconn-1 :
+                    self.iface.currentconn = 0
+                    # self.guirun.set()
+                    # self.gui.terminate()
+                    self.queue.put(("destroy",))
+                    
+                elif tograb :
+                    # self.guirun.clear()
+                    # self.gui = multiprocessing.Process(target=show_menu, args=(list(self.iface.connections.values())[self.iface.currentconn-1]['name'],self.guirun,self.queue,))
+                    # self.gui.start()
+                    self.queue.put(("show",))
+                    self.queue.put((list(self.iface.connections.values())[self.iface.currentconn-1]['name'], ))
+                    self.grabbed.set()
+                    self.dev.grab()
+                else :
+                    self.queue.put((list(self.iface.connections.values())[self.iface.currentconn-1]['name'], ))
+                print(self.iface.currentconn)
                     
                 self.switch = False
                 
@@ -128,15 +134,32 @@ class Keyboard():
         else:
             # Get the keycode of the key
             hex_key = keymap.convert(ecodes.KEY[event.code])
+            if ecodes.KEY[event.code] == "KEY_F3":
+                # print("volume up")
+                self.consumer_control[2] = 0xE9 if event.value == 1 else 0x00
+                self.consume = True
+                # self.iface.send_string(bytes([0xA1, 0x03, 0xE9, 0x00]))
+                # time.sleep(0.03)
+                # self.iface.send_string(bytes([0xA1, 0x03, 0x00, 0x00]))
+            elif ecodes.KEY[event.code] == "KEY_F2":
+                # print("volume down")
+                self.consumer_control[2] = 0xEA if event.value == 1 else 0x00
+                self.consume == True
+            
+            elif ecodes.KEY[event.code] == "KEY_F4":
+                self.consumer_control[2] = 0xE2 if event.value == 1 else 0x00
+                self.consume == True
+
+            else :
             # Loop through elements 4 to 9 of the inport report structure
-            for i in range(4, 10):
-                if self.state[i] == hex_key and event.value == 0:
-                    # Code 0 so we need to depress it
-                    self.state[i] = 0x00
-                elif self.state[i] == 0x00 and event.value == 1:
-                    # if the current space if empty and the key is being pressed
-                    self.state[i] = hex_key
-                    break
+                for i in range(4, 10):
+                    if self.state[i] == hex_key and event.value == 0:
+                        # Code 0 so we need to depress it
+                        self.state[i] = 0x00
+                    elif self.state[i] == 0x00 and event.value == 1:
+                        # if the current space if empty and the key is being pressed
+                        self.state[i] = hex_key
+                        break
         
         if self.grabbed.is_set():
             self.send_input()
@@ -154,6 +177,13 @@ class Keyboard():
 
     # forward keyboard events to the dbus service
     def send_input(self):
+        if self.consume :
+            if not self.iface.send_string(bytes(self.consumer_control)) :
+                self.grabbed.clear()
+                self.dev.ungrab()
+            self.consume = False
+            return
+        
         bin_str = ""
         element = self.state[2]
         for bit in element:

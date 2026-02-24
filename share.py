@@ -14,13 +14,23 @@ import pyudev
 import re
 # from websocket import warning
 import notifier
-
+import dbus as dbb
 import asyncio
-
+import dbus_service as db
 from mouse.mouse_client import InputDevice
 from evdev import ecodes
 
 import server.btk_server as server
+import os
+
+from dbus.mainloop.glib import DBusGMainLoop
+from gi.repository import GLib
+
+DBusGMainLoop(set_as_default=True)
+# Create mainloop FIRST
+dbusloop = GLib.MainLoop()
+
+dbus_addr = os.environ["DBUS_SESSION_BUS_ADDRESS"]
 
 logging.basicConfig(
     filename='app.log',
@@ -86,6 +96,12 @@ async def keyboard_worker(grabbed, mac, run, server, disconnected, log_queue):
                             kbrd.dev.ungrab()
                         except OSError :
                             pass
+                    else :
+                        try :
+                            kbrd.dev.grab()
+                        except OSError :
+                            pass
+
                     # if not kbrd.grabbed:
                     #     continue
                     # only bother if we hit a key and its an up or down event
@@ -122,16 +138,25 @@ async def main():
     # server_obj.listen()
     t.start()
 
-    queue = Queue()
+    queue = Queue() 
     guirun = Event()
+    
     guip = Process(target=notifier.main_loop, args=(guirun, queue, ))
     guip.start()
 
+    dbq = Queue()
+    # dbus = Process(target=db.start_process, args=(dbq,dbus_addr,dbusloop))
+    # dbus.start()
+
     async def checker(run, iface, disconnected, queue):
         device_props = {}
-        bus = dbus.SystemBus()
 
+        bus = dbb.SystemBus()
+
+
+        # print("checking disconnections...")
         while not run.is_set():
+            # print("checking disconnections...")
             discon = []
             if iface.currentconn == 0 :
                 grabbed.clear()
@@ -143,17 +168,19 @@ async def main():
 
                         device_path = f"/org/bluez/{ADAPTER}/dev_{MAC.replace(':','_')}"
                         
-                        device_props[MAC] = dbus.Interface(
+                        device_props[MAC] = dbb.Interface(
                             bus.get_object("org.bluez", device_path),
                             "org.freedesktop.DBus.Properties"
                         )
 
                     connected = device_props[MAC].Get("org.bluez.Device1", "Connected")
+                    # print(connected)
                     if not bool(connected) :
                         
-                        print("Disconnected...")
+                        print(f"{iface.connections[MAC]['name']} Disconnected after {(time.time_ns() - iface.connections[MAC]['time'])/1000000000} seconds")
                         discon.append(MAC)
                 except Exception as e :
+                    print(e)
                     discon.append(MAC)
                     
 
@@ -167,13 +194,14 @@ async def main():
                     queue.put((list(iface.connections.values())[iface.currentconn-1]['name'], ))
 
             if len(iface.connections) == 0:
-                # print("No devices connected..")
+                print("No devices connected..")
                 disconnected.set()
                 await asyncio.sleep(5)
             else :
+                # print("devices connected..")
                 disconnected.clear()
 
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.2)
 
     # p = 
     # p.start()
@@ -269,9 +297,31 @@ async def main():
         task.update({kbrd:tas})
         tas.add_done_callback(lambda x: task.pop(kbrd))
 
+    db.start_process(dbq,dbus_addr, dbusloop)
+
+    context = GLib.MainContext.default()
     while task :
+        try : 
+            context.iteration(False)
+            obj = dbq.get_nowait()
+            if obj == 0 :
+                server_obj.currentconn = 0
+                queue.put(("destroy",))
+            else :
+                server_obj.currentconn += 1
+                
+                if len(server_obj.connections) <= server_obj.currentconn-1 :
+                    server_obj.currentconn = 0
+                    queue.put(("destroy",))
+                else :
+                    queue.put(("show",))
+                    queue.put((list(server_obj.connections.values())[server_obj.currentconn-1]['name'], ))
+                    grabbed.set()
+            print(obj)
+        except Exception :
+            pass
         await asyncio.sleep(0.1)
-    # await asyncio.gather(*task.items())
+    await asyncio.gather(*task.items())
 
 if __name__ == "__main__":
     asyncio.run(main())

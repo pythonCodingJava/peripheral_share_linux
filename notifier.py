@@ -18,7 +18,7 @@ def show_menu(run, queue:Queue):
     x = (screen_width // 2) - (size // 2)
     y = (screen_height // 2) - (size // 2)
     # Set geometry
-    root.geometry(f"{screen_width}x{screen_height}+{0}+{0}")
+    root.geometry(f"{int(screen_width/10)}x{int(screen_height/10)}+{0}+{0}")
     # Appearance
     root.configure(bg="black")
     label = tk.Label(
@@ -31,8 +31,8 @@ def show_menu(run, queue:Queue):
     label.place(relx=0.5, rely=0.5, anchor="center")
 
 
-    root.wait_visibility(root) 
-    root.attributes("-alpha", 0.5)
+    # root.wait_visibility(root) 
+    # root.attributes("-alpha", 0.5)
     # root.withdraw()
     # Square size
     try :
