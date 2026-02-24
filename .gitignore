@@ -1,6 +1,10 @@
 .vscode/*
 */__pycache__/*
 test.py
+<<<<<<< HEAD
 venv
 venv/*
 __pycache__/*
+=======
+__pycache__/*
+>>>>>>> 889a0db984b1feeac01a32264af803dbef30306c

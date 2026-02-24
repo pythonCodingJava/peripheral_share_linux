@@ -194,7 +194,7 @@ async def main():
                     queue.put((list(iface.connections.values())[iface.currentconn-1]['name'], ))
 
             if len(iface.connections) == 0:
-                print("No devices connected..")
+                # print("No devices connected..")
                 disconnected.set()
                 await asyncio.sleep(5)
             else :
