@@ -1,0 +1,1 @@
+sudo -E ./venv/bin/python share.py

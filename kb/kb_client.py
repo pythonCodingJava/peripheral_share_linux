@@ -5,17 +5,11 @@
 # Reads local key events and forwards them to the btk_server DBUS service
 #
 import logging
-import os  # used to all external commands
-import sys  # used to exit the script
 import dbus
-import dbus.service
-import dbus.mainloop.glib
 import time
-import evdev  # used to get input from the keyboard
 from evdev import *
 import kb.keymap  as keymap # used to map evdev input to hid keodes
-import multiprocessing
-from notifier import show_menu
+# from notifier import show_menu
 
 # Define a client to listen to local key events
 class Keyboard():

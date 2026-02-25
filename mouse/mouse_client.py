@@ -1,16 +1,10 @@
 #!/usr/bin/python3
 
-import dbus
-import dbus.service
-import dbus.mainloop.glib
 import time
 import evdev
 from evdev import *
 import logging
-from logging import debug, info, warning, error
-import os
-import sys
-from select import select
+from logging import info, error
 import pyudev
 import re
 

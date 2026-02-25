@@ -1,5 +1,4 @@
-import threading
-import time
+
 import tkinter as tk
 from multiprocessing import Queue, Event,Process
 

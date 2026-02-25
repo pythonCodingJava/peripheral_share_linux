@@ -27,12 +27,10 @@ import subprocess
 logging.basicConfig(level=logging.DEBUG)
 
 # @todo fill your host mac here manually
-TARGET_ADDRESS = "BC:BB:58:71:E0:A9"
 
 class BTKbDevice():
     # change these constants
-    MY_ADDRESS = "D8:80:83:CA:A6:16"
-    MY_DEV_NAME = "Kartiks Keyboard Mouse"
+    MY_DEV_NAME = "Peripheral Share"
 
     # define some constants
     P_CTRL = 17  # Service port - must match port configured in SDP record

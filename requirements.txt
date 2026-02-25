@@ -1,0 +1,5 @@
+evdev==1.9.3
+pybluez2==0.46
+pygobject==3.42.1
+pyudev==0.24.4
+dbus_python==1.2.18
